@@ -46,9 +46,10 @@ jobs:
             echo "No tests directory yet — skipping pytest"
           fi
 
+  # Enable this job once tests/integration/ exists (see tutorials/11-testing.md).
   integration-tests:
     name: Integration tests (real OpenSearch)
-    if: ${{ hashFiles('tests/integration/**') != '' }}
+    if: false
     runs-on: ubuntu-latest
     services:
       opensearch:
