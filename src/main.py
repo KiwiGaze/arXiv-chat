@@ -28,6 +28,13 @@ async def lifespan(app: FastAPI):
     app.state.database = database
     logger.info("Database connected")
 
+    from src.services.arxiv.factory import make_arxiv_client
+    from src.services.pdf_parser.factory import make_pdf_parser_service
+
+    app.state.arxiv_client = make_arxiv_client()
+    app.state.pdf_parser = make_pdf_parser_service()
+    logger.info("Services initialized: arXiv API client, PDF parser")
+
     logger.info("API ready")
     yield
 
