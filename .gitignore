@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Environment & secrets
+.env
+
+# Data & artifacts
+data/
+*.pdf
+
+# Airflow
+airflow/logs/
+airflow/plugins/
+airflow/*.pid
+airflow/*.generated
+airflow/simple_auth_manager_passwords.json.generated
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
