@@ -48,7 +48,7 @@ jobs:
 
   integration-tests:
     name: Integration tests (real OpenSearch)
-    if: hashFiles('tests/integration/**') != ''
+    if: ${{ hashFiles('tests/integration/**') != '' }}
     runs-on: ubuntu-latest
     services:
       opensearch:
