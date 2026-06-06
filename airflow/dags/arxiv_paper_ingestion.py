@@ -4,7 +4,7 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from arxiv_ingestion.fetching import fetch_daily_papers
-from arxiv_ingestion.indexing import index_papers_hybrid, verify_hybrid_index
+from arxiv_ingestion.indexing import index_papers_hybrid
 from arxiv_ingestion.reporting import generate_daily_report
 
 # Import task functions from modular structure

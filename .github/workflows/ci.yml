@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint, type-check, unit & API tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff format check
+        run: uv run ruff format --check
+
+      - name: Ruff lint
+        run: uv run ruff check
+
+      - name: Mypy type check
+        run: uv run mypy src/
+
+      - name: Run unit & API tests (offline, services mocked)
+        run: |
+          if [ -d tests ]; then
+            uv run pytest --ignore=tests/integration -q
+          else
+            echo "No tests directory yet — skipping pytest"
+          fi
+
+  integration-tests:
+    name: Integration tests (real OpenSearch)
+    if: hashFiles('tests/integration/**') != ''
+    runs-on: ubuntu-latest
+    services:
+      opensearch:
+        image: opensearchproject/opensearch:2.19.0
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "curl -f http://localhost:9200/_cluster/health || exit 1"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 10
+          --health-start-period 60s
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Wait for OpenSearch
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9200/_cluster/health >/dev/null; then
+              echo "OpenSearch is up"; break
+            fi
+            echo "waiting for opensearch ($i)..."; sleep 5
+          done
+
+      - name: Run integration tests
+        env:
+          OPENSEARCH__HOST: http://localhost:9200
+        run: uv run pytest tests/integration -q
+
+  docker-build:
+    name: Build API image
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: arxiv-chat-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
