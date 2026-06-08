@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 from src.config import get_settings
 from src.db.factory import make_database
-from src.routers import ping
+from src.routers import hybrid_search, ping
 
 # Setup logging
 logging.basicConfig(
@@ -36,7 +36,10 @@ async def lifespan(app: FastAPI):
     app.state.pdf_parser = make_pdf_parser_service()
     logger.info("Services initialized: arXiv API client, PDF parser")
 
+    from src.services.embeddings.factory import make_embeddings_service
     from src.services.opensearch.factory import make_opensearch_client
+
+    app.state.embeddings_service = make_embeddings_service()
 
     opensearch_client = make_opensearch_client()
     app.state.opensearch_client = opensearch_client
@@ -67,6 +70,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(ping.router, prefix="/api/v1")  # Health check endpoint
+app.include_router(hybrid_search.router, prefix="/api/v1")  # Search chunks with BM25/hybrid
 
 
 if __name__ == "__main__":

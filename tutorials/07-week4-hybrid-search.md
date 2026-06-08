@@ -546,7 +546,7 @@ class TextChunker:
                 text=enhanced_text,
                 metadata=ChunkMetadata(
                     chunk_index=base_chunk_index + i,
-                    start_char=chunk.metadata.start_char,
+                    start_char=chunk.metadata.start_char + len(header),
                     end_char=chunk.metadata.end_char + len(header),
                     word_count=len(enhanced_text.split()),
                     overlap_with_previous=chunk.metadata.overlap_with_previous,
@@ -660,7 +660,7 @@ class JinaEmbeddingsClient:
         :param batch_size: Number of texts to process in each API call
         :returns: List of embedding vectors
         """
-        embeddings = []
+        embeddings: List[List[float]] = []
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
@@ -677,6 +677,11 @@ class JinaEmbeddingsClient:
 
                 result = JinaEmbeddingResponse(**response.json())
                 batch_embeddings = [item["embedding"] for item in result.data]
+                if len(batch_embeddings) != len(batch):
+                    message = f"Jina API returned {len(batch_embeddings)} embeddings for {len(batch)} passages"
+                    logger.error(message)
+                    raise ValueError(message)
+
                 embeddings.extend(batch_embeddings)
 
                 logger.debug(f"Embedded batch of {len(batch)} passages")
@@ -704,6 +709,11 @@ class JinaEmbeddingsClient:
             response.raise_for_status()
 
             result = JinaEmbeddingResponse(**response.json())
+            if not result.data:
+                message = "Jina API returned no embeddings for the query"
+                logger.error(message)
+                raise ValueError(message)
+
             embedding = result.data[0]["embedding"]
 
             logger.debug(f"Embedded query: '{query[:50]}...'")
@@ -752,27 +762,14 @@ def make_embeddings_service(settings: Optional[Settings] = None) -> JinaEmbeddin
     if settings is None:
         settings = get_settings()
 
-    # Get API key from settings
-    api_key = settings.jina_api_key
+    api_key = settings.jina_api_key.strip()
+    if not api_key:
+        raise ValueError("Jina API key is not configured. Set JINA_API_KEY in the environment or .env.")
 
     return JinaEmbeddingsClient(api_key=api_key)
 
 
-def make_embeddings_client(settings: Optional[Settings] = None) -> JinaEmbeddingsClient:
-    """Factory function to create embeddings client.
-
-    Creates a new client instance each time to avoid closed client issues.
-
-    :param settings: Optional settings instance
-    :returns: JinaEmbeddingsClient instance
-    """
-    if settings is None:
-        settings = get_settings()
-
-    # Get API key from settings
-    api_key = settings.jina_api_key
-
-    return JinaEmbeddingsClient(api_key=api_key)
+make_embeddings_client = make_embeddings_service
 ```
 
 > **注意：嵌入工厂故意不加 `lru_cache`**。`JinaEmbeddingsClient` 内部持有一个 `httpx.AsyncClient`，若做成单例并被某处 `close()`，后续请求会用到已关闭的客户端。每次新建可规避这个陷阱（这是对"工厂=单例"惯例的有意例外，呼应第 [03](03-architecture-and-design.md) 章模式一）。
@@ -785,7 +782,7 @@ def make_embeddings_client(settings: Optional[Settings] = None) -> JinaEmbedding
 
 ```python
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from src.services.embeddings.jina_client import JinaEmbeddingsClient
 from src.services.opensearch.client import OpenSearchClient
@@ -1036,6 +1033,7 @@ response = self.client.search(index=..., body=search_body, params={"search_pipel
 import logging
 
 from fastapi import APIRouter, HTTPException
+
 from src.dependencies import EmbeddingsDep, OpenSearchDep
 from src.schemas.api.search import HybridSearchRequest, SearchHit, SearchResponse
 
@@ -1160,10 +1158,21 @@ EmbeddingsDep = Annotated[JinaEmbeddingsClient, Depends(get_embeddings_service)]
 ### 方式 A：触发 Airflow DAG（推荐，端到端）
 
 ```bash
-docker compose up -d --build api airflow opensearch postgres
+docker compose build airflow && docker compose up -d api airflow opensearch postgres
 ```
 
 打开 http://localhost:8080，手动触发 `arxiv_paper_ingestion`。完成后 `index_papers_hybrid` 会把论文分块、嵌入并写入 OpenSearch。
+
+触发后、测检索前，先确认 PDF 解析与索引已真正写入（任务全绿不够——`raw_text` 为空时 `index_papers_hybrid` 会成功但 0 chunks）：
+
+```bash
+# 1) PDF 是否真正解析成功
+docker exec rag-postgres psql -U rag_user -d rag_db -c \
+  "SELECT COUNT(*) FILTER (WHERE pdf_processed) AS parsed, COUNT(*) AS total FROM papers;"
+
+# 2) OpenSearch 是否有 chunk 文档
+curl -s http://localhost:9200/arxiv-papers-chunks/_count | python -m json.tool
+```
 
 ### 方式 B：直接调用统一检索端点
 
