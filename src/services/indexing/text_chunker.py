@@ -475,7 +475,7 @@ class TextChunker:
                 text=enhanced_text,
                 metadata=ChunkMetadata(
                     chunk_index=base_chunk_index + i,
-                    start_char=chunk.metadata.start_char,
+                    start_char=chunk.metadata.start_char + len(header),
                     end_char=chunk.metadata.end_char + len(header),
                     word_count=len(enhanced_text.split()),
                     overlap_with_previous=chunk.metadata.overlap_with_previous,

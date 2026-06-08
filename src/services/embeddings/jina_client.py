@@ -36,7 +36,7 @@ class JinaEmbeddingsClient:
         :param batch_size: Number of texts to process in each API call
         :returns: List of embedding vectors
         """
-        embeddings = []
+        embeddings: List[List[float]] = []
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
@@ -53,6 +53,11 @@ class JinaEmbeddingsClient:
 
                 result = JinaEmbeddingResponse(**response.json())
                 batch_embeddings = [item["embedding"] for item in result.data]
+                if len(batch_embeddings) != len(batch):
+                    message = f"Jina API returned {len(batch_embeddings)} embeddings for {len(batch)} passages"
+                    logger.error(message)
+                    raise ValueError(message)
+
                 embeddings.extend(batch_embeddings)
 
                 logger.debug(f"Embedded batch of {len(batch)} passages")
@@ -80,6 +85,11 @@ class JinaEmbeddingsClient:
             response.raise_for_status()
 
             result = JinaEmbeddingResponse(**response.json())
+            if not result.data:
+                message = "Jina API returned no embeddings for the query"
+                logger.error(message)
+                raise ValueError(message)
+
             embedding = result.data[0]["embedding"]
 
             logger.debug(f"Embedded query: '{query[:50]}...'")
