@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, HTTPException
+
 from src.dependencies import EmbeddingsDep, OpenSearchDep
 from src.schemas.api.search import HybridSearchRequest, SearchHit, SearchResponse
 

@@ -785,7 +785,7 @@ def make_embeddings_client(settings: Optional[Settings] = None) -> JinaEmbedding
 
 ```python
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from src.services.embeddings.jina_client import JinaEmbeddingsClient
 from src.services.opensearch.client import OpenSearchClient
@@ -1036,6 +1036,7 @@ response = self.client.search(index=..., body=search_body, params={"search_pipel
 import logging
 
 from fastapi import APIRouter, HTTPException
+
 from src.dependencies import EmbeddingsDep, OpenSearchDep
 from src.schemas.api.search import HybridSearchRequest, SearchHit, SearchResponse
 
