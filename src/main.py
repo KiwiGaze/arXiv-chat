@@ -36,6 +36,21 @@ async def lifespan(app: FastAPI):
     app.state.pdf_parser = make_pdf_parser_service()
     logger.info("Services initialized: arXiv API client, PDF parser")
 
+    from src.services.opensearch.factory import make_opensearch_client
+
+    opensearch_client = make_opensearch_client()
+    app.state.opensearch_client = opensearch_client
+
+    if opensearch_client.health_check():
+        logger.info("OpenSearch connected successfully")
+        setup_results = opensearch_client.setup_indices(force=False)
+        if setup_results.get("hybrid_index"):
+            logger.info("Hybrid index created")
+        else:
+            logger.info("Hybrid index already exists")
+    else:
+        logger.warning("OpenSearch connection failed - search features will be limited")
+
     logger.info("API ready")
     yield
 
