@@ -92,10 +92,22 @@ docker compose logs -f <name>   # 看具体服务日志（如 rag-api / rag-open
 - **原因**：没有应用**修复 #6**（第 [05](05-week2-ingestion.md) 章）——`PDFParserService.parse_pdf` 里 `await self.docling_parser.parse_pdf(...)`，但 `DoclingParser.parse_pdf` 是同步方法。
 - **解决**：去掉那个 `await`，改为 `result = self.docling_parser.parse_pdf(pdf_path)`。
 
+### 症状：Airflow 日志报 `libGL.so.1: cannot open shared object file`；或 DAG 全绿但 `pdf_processed` 全为 false、OpenSearch count 为 0
+
+- **原因**：Airflow 镜像基于 `python:3.12-slim`，默认不含 OpenGL 运行库；Docling 初始化/解析依赖 `libGL.so.1`。
+- **解决**：
+  1. 在 `airflow/Dockerfile` 加入 `libgl1`、`libglib2.0-0`（见第 [05](05-week2-ingestion.md) 章）。
+  2. 重建并重启：
+     ```bash
+     docker compose build airflow && docker compose up -d airflow
+     ```
+  3. 在 Airflow UI 重新触发 `arxiv_paper_ingestion`（选有论文的日期；若自动日期返回 0 篇，可手动指定 `execution_date` 或等次日调度）。
+  4. 验证解析与索引（见第 [07](07-week4-hybrid-search.md) 章 7.9 的 preflight 命令）。
+
 ### 症状：部分论文只有元数据，没有 `raw_text`/`sections`
 
-- **原因**：PDF 下载失败、超大/超页数被跳过、或解析异常。`pdf_processed=False`。
-- **解决**：这是预期的优雅降级。看日志里的 `Download failures` / `Parse failures` 统计；可对失败的 arxiv_id 重试。
+- **原因**：PDF 下载失败、超大/超页数被跳过（`PDF_PARSER__MAX_PAGES=30` / `MAX_FILE_SIZE_MB=20`）、`libGL.so.1` 缺失导致 Docling 崩溃、或其他解析异常。`pdf_processed=False`。
+- **解决**：这是预期的优雅降级。看日志里的 `Download failures` / `Parse failures` 统计；若报 `libGL.so.1`，按上一节修复 Dockerfile；可对失败的 arxiv_id 重试。
 
 ### 症状：Airflow DAG 里 `setup_environment` 或 `index_papers_hybrid` 失败
 
@@ -108,9 +120,14 @@ docker compose logs -f <name>   # 看具体服务日志（如 rag-api / rag-open
 
 ### 症状：检索总是返回空 `hits`
 
-- **原因**：索引里没数据（还没灌）；或索引名不一致。
+- **原因**：索引里没数据（还没灌）；或索引名不一致；或 PDF 从未解析成功（`pdf_processed=false`，索引任务会跳过空 `raw_text`）。
 - **解决**：
   - 先灌数据（触发 Airflow DAG）。
+  - 若 count 为 0，先查 `pdf_processed` 是否为 true，而不只是"有没有跑过 DAG"：
+    ```bash
+    docker exec rag-postgres psql -U rag_user -d rag_db -c \
+      "SELECT COUNT(*) FILTER (WHERE pdf_processed) AS parsed, COUNT(*) AS total FROM papers;"
+    ```
   - 确认索引存在且有文档：
     ```bash
     curl -s http://localhost:9200/arxiv-papers-chunks/_count | python -m json.tool

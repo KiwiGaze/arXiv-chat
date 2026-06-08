@@ -78,6 +78,17 @@ mkdir -p src/schemas/common src/schemas/telegram
 
 上游 `cache/` 目录无 `__init__.py`，作为命名空间包工作，导入 `src.services.cache.client` / `.factory` 正常。本教程保持一致，**不创建** `cache/__init__.py`。
 
+### B.3 Airflow 镜像缺少 Docling 系统库
+
+- **症状**：Airflow `fetch_daily_papers` 日志报 `libGL.so.1: cannot open shared object file`；或 DAG 全绿但 Postgres 里 `pdf_processed=false`、`raw_text=null`，OpenSearch `arxiv-papers-chunks` count 为 0。
+- **原因**：上游 `airflow/Dockerfile` 基于 `python:3.12-slim`，只装了 `poppler-utils`/`tesseract-ocr`，未装 Docling 依赖的 OpenGL 运行库（`libGL.so.1`）。
+- **本教程处置**：在 `airflow/Dockerfile` 的 `apt-get install` 块加入 `libgl1`、`libglib2.0-0`（另加 `procps` 供 `entrypoint.sh` 的 `pkill`）。详见第 [05](05-week2-ingestion.md) 章 Dockerfile 段；排错见第 [13](13-troubleshooting.md) 章 §13.3。
+- **恢复步骤**：
+  ```bash
+  docker compose build airflow && docker compose up -d airflow
+  ```
+  然后在 Airflow UI 重新触发 `arxiv_paper_ingestion`（选有论文的日期）。`upsert` 会更新已有元数据行。
+
 ---
 
 ## C. 非崩溃的小瑕疵（本教程逐字保留并标注）

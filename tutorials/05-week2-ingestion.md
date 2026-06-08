@@ -1608,8 +1608,11 @@ RUN apt-get update && \
         build-essential \
         curl \
         git \
+        libgl1 \
+        libglib2.0-0 \
         libpq-dev \
         poppler-utils \
+        procps \
         tesseract-ocr \
         && rm -rf /var/lib/apt/lists/*
 
@@ -1652,6 +1655,8 @@ CMD ["/entrypoint.sh"]
 > - Airflow 有自己的版本约束（用官方 constraints 文件锁定），与应用依赖混装容易冲突。
 > - 任务只需要"摄取/索引"相关依赖子集，镜像更聚焦。
 > - `poppler-utils`/`tesseract-ocr` 是 PDF/OCR 的系统依赖。
+> - Docling 在 `python:*-slim` 镜像里还需要 `libgl1` 和 `libglib2.0-0`（提供 `libGL.so.1`）。缺少时 PDF 解析会在 Airflow 任务里静默失败，论文只存元数据（`pdf_processed=false`），后续 Week 4 索引会得到 0 chunks。
+> - `procps` 提供 `pkill`，供 `entrypoint.sh` 在启动前清理残留 Airflow 进程。
 
 ### 文件：`airflow/requirements-airflow.txt`（逐字复制）
 
@@ -2243,7 +2248,8 @@ PDFParserDep = Annotated[PDFParserService, Depends(get_pdf_parser)]
 docker compose up -d postgres
 
 # 构建并启动 Airflow（首次构建较慢）
-docker compose up -d --build airflow
+docker compose build airflow   # Dockerfile 变更后必须重建，不能只 restart
+docker compose up -d airflow
 
 # 看日志，等 webserver + scheduler 起来
 docker compose logs -f airflow
@@ -2252,6 +2258,12 @@ docker compose logs -f airflow
 打开 **http://localhost:8080**，用 `admin`/`admin` 登录，应能看到 `arxiv_paper_ingestion` DAG。
 
 > 完整触发 DAG 需要 Week 3–4 的 opensearch / indexing 模块就绪。现在你可以单独验证"抓取 + 解析"。
+>
+> **注意**：DAG 任务全绿不代表 PDF 解析成功。触发后请确认数据库里 `pdf_processed=true` 的行数大于 0：
+> ```bash
+> docker exec rag-postgres psql -U rag_user -d rag_db -c \
+>   "SELECT COUNT(*) FILTER (WHERE pdf_processed) AS parsed, COUNT(*) AS total FROM papers;"
+> ```
 
 ### 不依赖 OpenSearch 的"抓取 + 解析"验证脚本
 

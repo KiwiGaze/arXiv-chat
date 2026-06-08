@@ -12,8 +12,11 @@ RUN apt-get update && \
         build-essential \
         curl \
         git \
+        libgl1 \
+        libglib2.0-0 \
         libpq-dev \
         poppler-utils \
+        procps \
         tesseract-ocr \
         && rm -rf /var/lib/apt/lists/*
 

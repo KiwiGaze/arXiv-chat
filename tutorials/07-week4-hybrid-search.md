@@ -1160,10 +1160,21 @@ EmbeddingsDep = Annotated[JinaEmbeddingsClient, Depends(get_embeddings_service)]
 ### 方式 A：触发 Airflow DAG（推荐，端到端）
 
 ```bash
-docker compose up -d --build api airflow opensearch postgres
+docker compose build airflow && docker compose up -d api airflow opensearch postgres
 ```
 
 打开 http://localhost:8080，手动触发 `arxiv_paper_ingestion`。完成后 `index_papers_hybrid` 会把论文分块、嵌入并写入 OpenSearch。
+
+触发后、测检索前，先确认 PDF 解析与索引已真正写入（任务全绿不够——`raw_text` 为空时 `index_papers_hybrid` 会成功但 0 chunks）：
+
+```bash
+# 1) PDF 是否真正解析成功
+docker exec rag-postgres psql -U rag_user -d rag_db -c \
+  "SELECT COUNT(*) FILTER (WHERE pdf_processed) AS parsed, COUNT(*) AS total FROM papers;"
+
+# 2) OpenSearch 是否有 chunk 文档
+curl -s http://localhost:9200/arxiv-papers-chunks/_count | python -m json.tool
+```
 
 ### 方式 B：直接调用统一检索端点
 
