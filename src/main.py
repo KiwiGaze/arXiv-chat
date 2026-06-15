@@ -54,6 +54,10 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("OpenSearch connection failed - search features will be limited")
 
+    from src.services.ollama.factory import make_ollama_client
+
+    app.state.ollama_client = make_ollama_client()
+
     logger.info("API ready")
     yield
 
