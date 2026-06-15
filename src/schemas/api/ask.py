@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -31,7 +31,7 @@ class AskResponse(BaseModel):
     answer: str = Field(..., description="Generated answer from LLM")
     sources: List[str] = Field(..., description="PDF URLs of source papers")
     chunks_used: int = Field(..., description="Number of chunks used for generation")
-    search_mode: str = Field(..., description="Search mode used: bm25 or hybrid")
+    search_mode: Literal["bm25", "hybrid"] = Field(..., description="Search mode used: bm25 or hybrid")
 
     class Config:
         json_schema_extra = {

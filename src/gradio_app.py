@@ -29,7 +29,8 @@ async def stream_response(
 
     try:
         url = f"{API_BASE_URL}/stream"
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        timeout = httpx.Timeout(connect=5.0, read=300.0, write=30.0, pool=30.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", url, json=payload, headers={"Accept": "text/plain"}) as response:
                 if response.status_code != 200:
                     yield f"Error: API returned status {response.status_code}"

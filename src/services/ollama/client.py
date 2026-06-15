@@ -110,6 +110,9 @@ class OllamaClient:
                 - total_tokens: Total tokens used
                 - latency_ms: Generation latency in milliseconds
         """
+        if stream:
+            raise OllamaException("generate() does not support stream=True; use generate_stream() instead.")
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 data = {"model": model, "prompt": prompt, "stream": stream, **kwargs}

@@ -1,15 +1,22 @@
+import logging
+
 from fastapi import APIRouter
 from sqlalchemy import text
 
-from ..dependencies import DatabaseDep, OpenSearchDep, SettingsDep
+from ..dependencies import DatabaseDep, OllamaDep, OpenSearchDep, SettingsDep
 from ..schemas.api.health import HealthResponse, ServiceStatus
-from ..services.ollama import OllamaClient
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
-async def health_check(settings: SettingsDep, database: DatabaseDep, opensearch_client: OpenSearchDep) -> HealthResponse:
+async def health_check(
+    settings: SettingsDep,
+    database: DatabaseDep,
+    opensearch_client: OpenSearchDep,
+    ollama_client: OllamaDep,
+) -> HealthResponse:
     """Comprehensive health check endpoint for monitoring and load balancer probes.
 
     :returns: Service health status with version and connectivity checks
@@ -20,17 +27,17 @@ async def health_check(settings: SettingsDep, database: DatabaseDep, opensearch_
 
     def _check_service(name: str, check_func, *args, **kwargs):
         """Helper to standardize service health checks."""
+        nonlocal overall_status
         try:
             if kwargs.get("is_async"):
-                # Handle async functions separately in the calling code
                 return check_func(*args)
             result = check_func(*args)
             services[name] = result
             if result.status != "healthy":
-                nonlocal overall_status
                 overall_status = "degraded"
-        except Exception as e:
-            services[name] = ServiceStatus(status="unhealthy", message=str(e))
+        except Exception:
+            logger.exception("%s health check failed", name)
+            services[name] = ServiceStatus(status="unhealthy", message="Health check failed")
             overall_status = "degraded"
 
     # Database check
@@ -55,13 +62,13 @@ async def health_check(settings: SettingsDep, database: DatabaseDep, opensearch_
 
     # Handle Ollama async check separately
     try:
-        ollama_client = OllamaClient(settings)
         ollama_health = await ollama_client.health_check()
         services["ollama"] = ServiceStatus(status=ollama_health["status"], message=ollama_health["message"])
         if ollama_health["status"] != "healthy":
             overall_status = "degraded"
-    except Exception as e:
-        services["ollama"] = ServiceStatus(status="unhealthy", message=str(e))
+    except Exception:
+        logger.exception("ollama health check failed")
+        services["ollama"] = ServiceStatus(status="unhealthy", message="Health check failed")
         overall_status = "degraded"
 
     return HealthResponse(
