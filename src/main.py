@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from src.config import get_settings
 from src.db.factory import make_database
 from src.routers import hybrid_search, ping
+from src.routers.ask import ask_router, stream_router
 
 # Setup logging
 logging.basicConfig(
@@ -58,6 +59,12 @@ async def lifespan(app: FastAPI):
 
     app.state.ollama_client = make_ollama_client()
 
+    from src.services.cache.factory import make_cache_client
+    from src.services.langfuse.factory import make_langfuse_tracer
+
+    app.state.langfuse_tracer = make_langfuse_tracer()
+    app.state.cache_client = make_cache_client(settings)
+
     logger.info("API ready")
     yield
 
@@ -75,6 +82,8 @@ app = FastAPI(
 # Include routers
 app.include_router(ping.router, prefix="/api/v1")  # Health check endpoint
 app.include_router(hybrid_search.router, prefix="/api/v1")  # Search chunks with BM25/hybrid
+app.include_router(ask_router, prefix="/api/v1")  # RAG question answering with LLM
+app.include_router(stream_router, prefix="/api/v1")  # Streaming RAG responses
 
 
 if __name__ == "__main__":
