@@ -73,7 +73,6 @@ Instructions:
 6. If multiple papers discuss the topic, synthesize the information coherently
 7. Use direct quotes from the chunks when particularly relevant
 8. Structure your answer logically with clear paragraphs when appropriate
-9. Keep it less than 200 words
 
 Remember:
 - Do NOT make up information not present in the excerpts
@@ -239,7 +238,7 @@ class ResponseParser:
 touch src/services/ollama/__init__.py
 ```
 
-`src/services/ollama/__init__.py` 需要导出 `OllamaClient`（最终版健康检查端点会 `from ..services.ollama import OllamaClient`）：
+`src/services/ollama/__init__.py` 需要导出 `OllamaClient`，供工厂和后续智能体服务复用：
 
 ### 文件：`src/services/ollama/__init__.py`（逐字复制）
 
@@ -365,6 +364,9 @@ class OllamaClient:
                 - total_tokens: Total tokens used
                 - latency_ms: Generation latency in milliseconds
         """
+        if stream:
+            raise OllamaException("generate() does not support stream=True; use generate_stream() instead.")
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 data = {"model": model, "prompt": prompt, "stream": stream, **kwargs}
@@ -613,7 +615,7 @@ def make_ollama_client() -> OllamaClient:
 ### 文件：`src/schemas/api/ask.py`（逐字复制）
 
 ```python
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -646,7 +648,7 @@ class AskResponse(BaseModel):
     answer: str = Field(..., description="Generated answer from LLM")
     sources: List[str] = Field(..., description="PDF URLs of source papers")
     chunks_used: int = Field(..., description="Number of chunks used for generation")
-    search_mode: str = Field(..., description="Search mode used: bm25 or hybrid")
+    search_mode: Literal["bm25", "hybrid"] = Field(..., description="Search mode used: bm25 or hybrid")
 
     class Config:
         json_schema_extra = {
@@ -727,18 +729,25 @@ class FeedbackResponse(BaseModel):
 ### 文件：`src/routers/ping.py`（逐字复制，最终版）
 
 ```python
+import logging
+
 from fastapi import APIRouter
 from sqlalchemy import text
 
-from ..dependencies import DatabaseDep, OpenSearchDep, SettingsDep
+from ..dependencies import DatabaseDep, OllamaDep, OpenSearchDep, SettingsDep
 from ..schemas.api.health import HealthResponse, ServiceStatus
-from ..services.ollama import OllamaClient
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
-async def health_check(settings: SettingsDep, database: DatabaseDep, opensearch_client: OpenSearchDep) -> HealthResponse:
+async def health_check(
+    settings: SettingsDep,
+    database: DatabaseDep,
+    opensearch_client: OpenSearchDep,
+    ollama_client: OllamaDep,
+) -> HealthResponse:
     """Comprehensive health check endpoint for monitoring and load balancer probes.
 
     :returns: Service health status with version and connectivity checks
@@ -749,17 +758,17 @@ async def health_check(settings: SettingsDep, database: DatabaseDep, opensearch_
 
     def _check_service(name: str, check_func, *args, **kwargs):
         """Helper to standardize service health checks."""
+        nonlocal overall_status
         try:
             if kwargs.get("is_async"):
-                # Handle async functions separately in the calling code
                 return check_func(*args)
             result = check_func(*args)
             services[name] = result
             if result.status != "healthy":
-                nonlocal overall_status
                 overall_status = "degraded"
-        except Exception as e:
-            services[name] = ServiceStatus(status="unhealthy", message=str(e))
+        except Exception:
+            logger.exception("%s health check failed", name)
+            services[name] = ServiceStatus(status="unhealthy", message="Health check failed")
             overall_status = "degraded"
 
     # Database check
@@ -784,13 +793,13 @@ async def health_check(settings: SettingsDep, database: DatabaseDep, opensearch_
 
     # Handle Ollama async check separately
     try:
-        ollama_client = OllamaClient(settings)
         ollama_health = await ollama_client.health_check()
         services["ollama"] = ServiceStatus(status=ollama_health["status"], message=ollama_health["message"])
         if ollama_health["status"] != "healthy":
             overall_status = "degraded"
-    except Exception as e:
-        services["ollama"] = ServiceStatus(status="unhealthy", message=str(e))
+    except Exception:
+        logger.exception("ollama health check failed")
+        services["ollama"] = ServiceStatus(status="unhealthy", message="Health check failed")
         overall_status = "degraded"
 
     return HealthResponse(
@@ -844,7 +853,8 @@ async def stream_response(
 
     try:
         url = f"{API_BASE_URL}/stream"
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        timeout = httpx.Timeout(connect=5.0, read=300.0, write=30.0, pool=30.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", url, json=payload, headers={"Accept": "text/plain"}) as response:
                 if response.status_code != 200:
                     yield f"Error: API returned status {response.status_code}"

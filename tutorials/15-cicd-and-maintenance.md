@@ -98,7 +98,7 @@ jobs:
         run: uv run mypy src/
 
       - name: Run unit & API tests (offline, services mocked)
-        run: uv run pytest --ignore=tests/integration -q
+        run: PYTHONPATH=. uv run pytest -p no:dotenv --ignore=tests/integration -q
 
   integration-tests:
     name: Integration tests (real OpenSearch)

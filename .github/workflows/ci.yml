@@ -41,7 +41,7 @@ jobs:
       - name: Run unit & API tests (offline, services mocked)
         run: |
           if [ -d tests ]; then
-            uv run pytest --ignore=tests/integration -q
+            PYTHONPATH=. uv run pytest -p no:dotenv --ignore=tests/integration -q
           else
             echo "No tests directory yet — skipping pytest"
           fi
