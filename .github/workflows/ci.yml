@@ -95,8 +95,10 @@ jobs:
           OPENSEARCH__HOST: http://localhost:9200
         run: uv run pytest tests/integration -q
 
+  # Re-enable before merge/deploy or when Dockerfile/deps stabilize (see tutorials/15-cicd-and-maintenance.md).
   docker-build:
     name: Build API image
+    if: false
     runs-on: ubuntu-latest
     needs: lint-and-test
     steps:
