@@ -422,7 +422,8 @@ class LangfuseTracer:
         status_message: Optional[str] = None,
     ):
         """
-        Update a span with output and metadata.
+        Update a span with output and metadata. Does not end the span; callers own the
+        lifecycle via end_span() or the trace_* context managers.
 
         Args:
             span: Span object from start_span()
@@ -447,7 +448,6 @@ class LangfuseTracer:
 
             if update_data:
                 span.update(**update_data)
-            span.end()
         except Exception as e:
             logger.error(f"Error updating span: {e}")
 
