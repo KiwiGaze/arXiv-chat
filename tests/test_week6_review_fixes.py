@@ -94,3 +94,64 @@ def test_trace_embedding_failure_not_overwritten_with_true():
         rag_tracer.tracer.update_span(span, output={"success": False, "error": "boom"})
 
     assert span.outputs[-1].get("success") is not True
+
+
+# --- Fix #2: search_mode must reflect actual retrieval mode ---
+
+
+class _FakeEmbeddings:
+    def __init__(self, fail=False):
+        self.fail = fail
+
+    async def embed_query(self, query):
+        if self.fail:
+            raise RuntimeError("embed failed")
+        return [0.1, 0.2]
+
+
+class _FakeOpenSearch:
+    def __init__(self):
+        self.last_use_hybrid = None
+
+    def search_unified(self, *, query, query_embedding, size, from_, categories, use_hybrid, min_score):
+        self.last_use_hybrid = use_hybrid
+        return {"hits": [{"arxiv_id": "2401.00001", "chunk_text": "x"}], "total": 1}
+
+
+def test_search_mode_is_bm25_when_embedding_fails():
+    import asyncio
+
+    from src.routers.ask import _prepare_chunks_and_sources
+    from src.schemas.api.ask import AskRequest
+
+    request = AskRequest(query="q", use_hybrid=True)
+    chunks, sources, ids, mode = asyncio.run(
+        _prepare_chunks_and_sources(request, _FakeOpenSearch(), _FakeEmbeddings(fail=True), RAGTracer(_FakeLangfuseTracer()), None)
+    )
+    assert mode == "bm25"
+
+
+def test_search_mode_is_hybrid_when_embedding_succeeds():
+    import asyncio
+
+    from src.routers.ask import _prepare_chunks_and_sources
+    from src.schemas.api.ask import AskRequest
+
+    request = AskRequest(query="q", use_hybrid=True)
+    chunks, sources, ids, mode = asyncio.run(
+        _prepare_chunks_and_sources(request, _FakeOpenSearch(), _FakeEmbeddings(fail=False), RAGTracer(_FakeLangfuseTracer()), None)
+    )
+    assert mode == "hybrid"
+
+
+def test_search_mode_is_bm25_when_hybrid_not_requested():
+    import asyncio
+
+    from src.routers.ask import _prepare_chunks_and_sources
+    from src.schemas.api.ask import AskRequest
+
+    request = AskRequest(query="q", use_hybrid=False)
+    chunks, sources, ids, mode = asyncio.run(
+        _prepare_chunks_and_sources(request, _FakeOpenSearch(), _FakeEmbeddings(fail=False), RAGTracer(_FakeLangfuseTracer()), None)
+    )
+    assert mode == "bm25"

@@ -879,7 +879,7 @@ async def _prepare_chunks_and_sources(
     embeddings_service,
     rag_tracer: RAGTracer,
     trace=None,
-) -> tuple[List[Dict], List[str], List[str]]:
+) -> tuple[List[Dict], List[str], List[str], str]:
     """Retrieve and prepare chunks for RAG with clean tracing."""
 
     # Handle embeddings for hybrid search
@@ -894,6 +894,8 @@ async def _prepare_chunks_and_sources(
                 if embedding_span:
                     rag_tracer.tracer.update_span(embedding_span, output={"success": False, "error": str(e)})
 
+    effective_hybrid = request.use_hybrid and query_embedding is not None
+
     # Search with tracing
     with rag_tracer.trace_search(trace, request.query, request.top_k) as search_span:
         search_results = opensearch_client.search_unified(
@@ -902,7 +904,7 @@ async def _prepare_chunks_and_sources(
             size=request.top_k,
             from_=0,
             categories=request.categories,
-            use_hybrid=request.use_hybrid and query_embedding is not None,
+            use_hybrid=effective_hybrid,
             min_score=0.0,
         )
 
@@ -930,7 +932,7 @@ async def _prepare_chunks_and_sources(
         # End search span with essential metadata
         rag_tracer.end_search(search_span, chunks, arxiv_ids, search_results.get("total", 0))
 
-    return chunks, list(sources_set), arxiv_ids
+    return chunks, list(sources_set), arxiv_ids, "hybrid" if effective_hybrid else "bm25"
 
 
 @ask_router.post("/ask", response_model=AskResponse)
@@ -964,7 +966,7 @@ async def ask_question(
             query_embedding = None
 
             # Retrieve chunks
-            chunks, sources, _ = await _prepare_chunks_and_sources(
+            chunks, sources, _, search_mode = await _prepare_chunks_and_sources(
                 request, opensearch_client, embeddings_service, rag_tracer, trace
             )
 
@@ -974,7 +976,7 @@ async def ask_question(
                     answer="I couldn't find any relevant information in the papers to answer your question.",
                     sources=[],
                     chunks_used=0,
-                    search_mode="bm25" if not request.use_hybrid else "hybrid",
+                    search_mode=search_mode,
                 )
                 rag_tracer.end_request(trace, response.answer, time.time() - start_time)
                 return response
@@ -1005,7 +1007,7 @@ async def ask_question(
                 answer=answer,
                 sources=sources,
                 chunks_used=len(chunks),
-                search_mode="bm25" if not request.use_hybrid else "hybrid",
+                search_mode=search_mode,
             )
 
             rag_tracer.end_request(trace, answer, time.time() - start_time)
@@ -1067,7 +1069,7 @@ async def ask_question_stream(
                         logger.warning(f"Cache check failed, proceeding with normal flow: {e}")
 
                 # Retrieve chunks
-                chunks, sources, _ = await _prepare_chunks_and_sources(
+                chunks, sources, _, search_mode = await _prepare_chunks_and_sources(
                     request, opensearch_client, embeddings_service, rag_tracer, trace
                 )
 
@@ -1076,7 +1078,6 @@ async def ask_question_stream(
                     return
 
                 # Send metadata first
-                search_mode = "bm25" if not request.use_hybrid else "hybrid"
                 metadata_response = {"sources": sources, "chunks_used": len(chunks), "search_mode": search_mode}
                 yield f"data: {json.dumps(metadata_response)}\n\n"
 
@@ -1109,7 +1110,6 @@ async def ask_question_stream(
                 # Store response in exact match cache
                 if cache_client and full_response:
                     try:
-                        search_mode = "bm25" if not request.use_hybrid else "hybrid"
                         response_to_cache = AskResponse(
                             query=request.query,
                             answer=full_response,
