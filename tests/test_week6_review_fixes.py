@@ -73,3 +73,24 @@ def test_trace_search_ends_span_once():
         rag_tracer.end_search(span, [], [], 0)
 
     assert span.ended == 1
+
+
+def test_trace_embedding_does_not_emit_success_true():
+    rag_tracer = RAGTracer(_FakeLangfuseTracer())
+
+    with rag_tracer.trace_embedding(None, "query") as span:
+        pass  # success path
+
+    assert span.outputs, "expected at least one update"
+    assert "success" not in span.outputs[-1]
+    assert "embedding_duration_ms" in span.outputs[-1]
+
+
+def test_trace_embedding_failure_not_overwritten_with_true():
+    """Caller writes success=False; finally must not clobber with True."""
+    rag_tracer = RAGTracer(_FakeLangfuseTracer())
+
+    with rag_tracer.trace_embedding(None, "query") as span:
+        rag_tracer.tracer.update_span(span, output={"success": False, "error": "boom"})
+
+    assert span.outputs[-1].get("success") is not True

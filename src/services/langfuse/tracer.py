@@ -38,7 +38,7 @@ class RAGTracer:
         finally:
             duration = time.time() - start_time
             if span:
-                self.tracer.update_span(span=span, output={"embedding_duration_ms": round(duration * 1000, 2), "success": True})
+                self.tracer.update_span(span=span, output={"embedding_duration_ms": round(duration * 1000, 2)})
                 span.end()
 
     @contextmanager
