@@ -10,10 +10,10 @@ This repository is built week-by-week following the tutorial series in `tutorial
 |------|-------|--------|
 | 1 | Infrastructure (Docker, FastAPI, PostgreSQL) | Done |
 | 2 | Data ingestion (arXiv, Docling, Airflow) | Done |
-| 3 | BM25 keyword search (OpenSearch) | Planned |
-| 4 | Hybrid search (chunking, embeddings, RRF) | Planned |
-| 5 | RAG + local LLM (Ollama, Gradio) | Planned |
-| 6 | Monitoring & caching (Langfuse, Redis) | Planned |
+| 3 | BM25 keyword search (OpenSearch) | Done |
+| 4 | Hybrid search (chunking, embeddings, RRF) | Done |
+| 5 | RAG + local LLM (Ollama, Gradio) | Done |
+| 6 | Monitoring & caching (Langfuse, Redis) | In progress |
 | 7 | Agentic RAG (LangGraph, Telegram) | Planned |
 
 ## Quick start

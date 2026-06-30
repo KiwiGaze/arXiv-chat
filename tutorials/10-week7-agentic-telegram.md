@@ -112,7 +112,7 @@ class SourceItem(BaseModel):
         }
 
 
-class ToolArtefact(BaseModel):
+class ToolArtifact(BaseModel):
     """Artifact returned by tool calls with metadata.
 
     :param tool_name: Name of the tool that generated this artifact
@@ -182,7 +182,7 @@ from typing import Annotated, Any, Dict, List, Optional, TypedDict
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 
-from .models import GradingResult, GuardrailScoring, RoutingDecision, SourceItem, ToolArtefact
+from .models import GradingResult, GuardrailScoring, RoutingDecision, SourceItem, ToolArtifact
 
 
 class AgentState(TypedDict):
@@ -224,9 +224,9 @@ class AgentState(TypedDict):
         List of relevant sources to display to the user.
     :type relevant_sources: List[SourceItem]
 
-    :cvar relevant_tool_artefacts:
+    :cvar relevant_tool_artifacts:
         List of tool artifacts with metadata from tool executions.
-    :type relevant_tool_artefacts: Optional[List[ToolArtefact]]
+    :type relevant_tool_artifacts: Optional[List[ToolArtifact]]
 
     :cvar grading_results:
         List of grading results for each retrieved document.
@@ -245,7 +245,7 @@ class AgentState(TypedDict):
     routing_decision: Optional[RoutingDecision]
     sources: Optional[Dict[str, Any]]
     relevant_sources: List[SourceItem]
-    relevant_tool_artefacts: Optional[List[ToolArtefact]]
+    relevant_tool_artifacts: Optional[List[ToolArtifact]]
     grading_results: List[GradingResult]
     metadata: Dict[str, Any]
 ```
@@ -575,7 +575,7 @@ from typing import Dict, List, Optional
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from ..models import ReasoningStep, SourceItem, ToolArtefact
+from ..models import ReasoningStep, SourceItem, ToolArtifact
 
 logger = logging.getLogger(__name__)
 
@@ -599,25 +599,25 @@ def extract_sources_from_tool_messages(messages: List) -> List[SourceItem]:
     return sources
 
 
-def extract_tool_artefacts(messages: List) -> List[ToolArtefact]:
+def extract_tool_artifacts(messages: List) -> List[ToolArtifact]:
     """Extract tool artifacts from messages.
 
     :param messages: List of messages from graph state
-    :returns: List of ToolArtefact objects
+    :returns: List of ToolArtifact objects
     """
-    artefacts = []
+    artifacts = []
 
     for msg in messages:
         if isinstance(msg, ToolMessage):
-            artefact = ToolArtefact(
+            artifact = ToolArtifact(
                 tool_name=getattr(msg, "name", "unknown"),
                 tool_call_id=getattr(msg, "tool_call_id", ""),
                 content=msg.content,
                 metadata={},
             )
-            artefacts.append(artefact)
+            artifacts.append(artifact)
 
-    return artefacts
+    return artifacts
 
 
 def create_reasoning_step(
@@ -1726,7 +1726,7 @@ class AgenticRAGService:
                 "routing_decision": None,
                 "sources": None,
                 "relevant_sources": [],
-                "relevant_tool_artefacts": None,
+                "relevant_tool_artifacts": None,
                 "grading_results": [],
                 "metadata": {},
                 "original_query": None,

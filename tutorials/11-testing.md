@@ -1548,7 +1548,7 @@ from src.services.agents.models import (
     GuardrailScoring,
     GradeDocuments,
     SourceItem,
-    ToolArtefact,
+    ToolArtifact,
     RoutingDecision,
     GradingResult,
     ReasoningStep,
@@ -1655,30 +1655,30 @@ class TestSourceItem:
         assert source_dict["relevance_score"] == 0.95
 
 
-class TestToolArtefact:
-    """Tests for ToolArtefact model."""
+class TestToolArtifact:
+    """Tests for ToolArtifact model."""
 
-    def test_valid_tool_artefact(self):
-        """Test creating valid tool artefact."""
-        artefact = ToolArtefact(
+    def test_valid_tool_artifact(self):
+        """Test creating valid tool artifact."""
+        artifact = ToolArtifact(
             tool_name="retrieve_papers",
             tool_call_id="call_123",
             content="Retrieved 3 papers",
             metadata={"count": 3, "source": "opensearch"}
         )
-        assert artefact.tool_name == "retrieve_papers"
-        assert artefact.tool_call_id == "call_123"
-        assert artefact.content == "Retrieved 3 papers"
-        assert artefact.metadata["count"] == 3
+        assert artifact.tool_name == "retrieve_papers"
+        assert artifact.tool_call_id == "call_123"
+        assert artifact.content == "Retrieved 3 papers"
+        assert artifact.metadata["count"] == 3
 
     def test_default_metadata(self):
         """Test default empty metadata."""
-        artefact = ToolArtefact(
+        artifact = ToolArtifact(
             tool_name="test_tool",
             tool_call_id="call_456",
             content="Test content"
         )
-        assert artefact.metadata == {}
+        assert artifact.metadata == {}
 
 
 class TestRoutingDecision:
@@ -2214,7 +2214,7 @@ class TestAgenticRAGAskMethod:
             "original_query": "Test query",
             "rewritten_query": None,
             "routing_decision": "generate_answer",
-            "relevant_tool_artefacts": None,
+            "relevant_tool_artifacts": None,
         }
 
         test_service.graph.ainvoke = AsyncMock(return_value=mock_final_state)
