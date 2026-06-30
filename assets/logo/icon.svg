@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" fill="none" style="color:#18181b" role="img" aria-label="arXiv Chat">
+  <mask id="paper-cut">
+    <rect x="0" y="0" width="96" height="96" fill="#fff"/>
+    <rect x="28" y="27" width="26" height="5" rx="2.5" fill="#000"/>
+    <rect x="28" y="39" width="44" height="5" rx="2.5" fill="#000"/>
+    <rect x="28" y="51" width="34" height="5" rx="2.5" fill="#000"/>
+    <path d="M62 18 L74 30 L62 30 Z" fill="#000"/>
+  </mask>
+  <g fill="currentColor" mask="url(#paper-cut)">
+    <path d="M30 14 L62 14 L80 32 L80 52 Q80 66 66 66 L30 66 Q16 66 16 52 L16 28 Q16 14 30 14 Z"/>
+    <path d="M28 62 Q26 80 22 84 Q34 80 44 62 Z"/>
+  </g>
+</svg>
