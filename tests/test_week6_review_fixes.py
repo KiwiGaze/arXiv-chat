@@ -124,11 +124,13 @@ def test_search_mode_is_bm25_when_embedding_fails():
     from src.routers.ask import _prepare_chunks_and_sources
     from src.schemas.api.ask import AskRequest
 
+    opensearch = _FakeOpenSearch()
     request = AskRequest(query="q", use_hybrid=True)
     chunks, sources, ids, mode = asyncio.run(
-        _prepare_chunks_and_sources(request, _FakeOpenSearch(), _FakeEmbeddings(fail=True), RAGTracer(_FakeLangfuseTracer()), None)
+        _prepare_chunks_and_sources(request, opensearch, _FakeEmbeddings(fail=True), RAGTracer(_FakeLangfuseTracer()), None)
     )
     assert mode == "bm25"
+    assert opensearch.last_use_hybrid is False
 
 
 def test_search_mode_is_hybrid_when_embedding_succeeds():
@@ -137,11 +139,13 @@ def test_search_mode_is_hybrid_when_embedding_succeeds():
     from src.routers.ask import _prepare_chunks_and_sources
     from src.schemas.api.ask import AskRequest
 
+    opensearch = _FakeOpenSearch()
     request = AskRequest(query="q", use_hybrid=True)
     chunks, sources, ids, mode = asyncio.run(
-        _prepare_chunks_and_sources(request, _FakeOpenSearch(), _FakeEmbeddings(fail=False), RAGTracer(_FakeLangfuseTracer()), None)
+        _prepare_chunks_and_sources(request, opensearch, _FakeEmbeddings(fail=False), RAGTracer(_FakeLangfuseTracer()), None)
     )
     assert mode == "hybrid"
+    assert opensearch.last_use_hybrid is True
 
 
 def test_search_mode_is_bm25_when_hybrid_not_requested():
@@ -150,8 +154,10 @@ def test_search_mode_is_bm25_when_hybrid_not_requested():
     from src.routers.ask import _prepare_chunks_and_sources
     from src.schemas.api.ask import AskRequest
 
+    opensearch = _FakeOpenSearch()
     request = AskRequest(query="q", use_hybrid=False)
     chunks, sources, ids, mode = asyncio.run(
-        _prepare_chunks_and_sources(request, _FakeOpenSearch(), _FakeEmbeddings(fail=False), RAGTracer(_FakeLangfuseTracer()), None)
+        _prepare_chunks_and_sources(request, opensearch, _FakeEmbeddings(fail=False), RAGTracer(_FakeLangfuseTracer()), None)
     )
     assert mode == "bm25"
+    assert opensearch.last_use_hybrid is False
